@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pace Calculator</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+    <div class="container">
+        <h1>Data Interface</h1>
+        
+        <form id="dataForm">
+            <div class="input-group">
+                <label for="age">Age (years):</label>
+                <input type="number" id="age" required>
+            </div>
+
+            <div class="input-group">
+                <label for="height">Height (cm):</label>
+                <input type="number" id="height" required>
+            </div>
+
+            <div class="input-group">
+                <label for="weight">Weight (kg):</label>
+                <input type="number" id="weight" required>
+            </div>
+
+            <div class="input-group">
+                <label for="experience">Experience Level:</label>
+                <select id="experience">
+                    <option value="1">Beginner</option>
+                    <option value="2">Intermediate</option>
+                    <option value="3">Advanced</option>
+                    <option value="4">Elite</option>
+                </select>
+            </div>
+
+            <button type="submit">Calculate Pace</button>
+        </form>
+
+        <div id="resultArea" class="hidden">
+            <h2>Expected Pace: <span id="paceValue">--</span></h2>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
