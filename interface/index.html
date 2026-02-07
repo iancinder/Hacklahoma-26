@@ -9,24 +9,21 @@
 <body>
 
     <div class="main-card">
-        <div class="pane input-pane">
-            <h2>Input</h2>
+        <div class="pane left-pane">
+            <h2>User Inputs</h2>
             <form>
                 <div class="input-group">
                     <label>Age</label>
                     <input type="number" placeholder="e.g. 21">
                 </div>
-                
                 <div class="input-group">
                     <label>Height (cm)</label>
                     <input type="number" placeholder="e.g. 180">
                 </div>
-
                 <div class="input-group">
                     <label>Weight (kg)</label>
                     <input type="number" placeholder="e.g. 75">
                 </div>
-
                 <div class="input-group">
                     <label>Experience</label>
                     <select>
@@ -35,15 +32,28 @@
                         <option>Advanced</option>
                     </select>
                 </div>
+            </form>
+        </div>
+
+        <div class="pane middle-pane">
+            <h2>Trail Inputs</h2>
+            <form>
+                <div class="input-group">
+                    <label>Distance (miles)</label>
+                    <input type="number" placeholder="e.g. 4.5">
+                </div>
+                <div class="input-group">
+                    <label>Elevation Gain (ft)</label>
+                    <input type="number" placeholder="e.g. 1200">
+                </div>
                 
                 <button type="button">Update</button>
             </form>
         </div>
 
-        <div class="pane output-pane">
-            
+        <div class="pane right-pane">
             <div class="stats-container">
-                <h2>Output</h2>
+                <h2>Outputs</h2>
                 <div class="stat-box">
                     <span class="stat-label">Expected Pace</span>
                     <span class="stat-value">-- : --</span>
@@ -53,10 +63,9 @@
             <div class="graph-container">
                 <h3>Graph of Time</h3>
                 <div class="chart-placeholder">
-                    [Graph Will Render Here]
+                    [Graph Here]
                 </div>
             </div>
-
         </div>
     </div>
 
