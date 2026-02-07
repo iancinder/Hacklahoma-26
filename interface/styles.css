@@ -12,6 +12,17 @@ body {
     display: flex;
     justify-content: center; /* Center card horizontally */
     align-items: center;     /* Center card vertically */
+
+    /* --- BACKGROUND WALLPAPER --- */
+    background-image: url('hacklahomabackground.png');
+    background-size: cover;
+    background-position: center;
+    
+    /* This keeps the map fixed so it doesn't move if you scroll */
+    background-attachment: fixed;
+
+    background-color: rgba(255, 255, 255, 0.9);
+    background-blend-mode: overlay;
 }
 
 
@@ -24,6 +35,8 @@ body {
     box-shadow: 0 10px 25px rgba(0,0,0,0.1); /* shadow */
     overflow: hidden; /* ensurers corners are rounded */
 }
+
+
 
 /* SHARED PANE STYLES */
 .pane {
