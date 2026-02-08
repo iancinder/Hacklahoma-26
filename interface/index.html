@@ -7,67 +7,117 @@
     <link rel="stylesheet" href="styles.css">
 </head>
 <body>
+    <div class="dashboard-wrapper">
 
-    <div class="main-card">
-        <div class="pane left-pane">
-            <h2>User Inputs</h2>
-            <form>
-                <div class="input-group">
-                    <label>Age</label>
-                    <input type="number" placeholder="e.g. 21">
-                </div>
-                <div class="input-group">
-                    <label>Height (cm)</label>
-                    <input type="number" placeholder="e.g. 180">
-                </div>
-                <div class="input-group">
-                    <label>Weight (kg)</label>
-                    <input type="number" placeholder="e.g. 75">
-                </div>
-                <div class="input-group">
-                    <label>Experience</label>
-                    <select>
-                        <option>Beginner</option>
-                        <option>Intermediate</option>
-                        <option>Advanced</option>
-                    </select>
-                </div>
-            </form>
-        </div>
+        <div class="main-card">
+            
+            <div class="pane left-pane">
+                <h2>User Profile</h2>
+                <form>
+                    <div class="input-group">
+                        <label>Age (years)</label>
+                        <input type="number" id="age" placeholder="e.g. 22">
+                    </div>
+                    
+                    <div class="input-group">
+                        <label>Weight (lbs)</label>
+                        <input type="number" id="weight_lb" placeholder="e.g. 160">
+                    </div>
 
-        <div class="pane middle-pane">
-            <h2>Trail Inputs</h2>
-            <form>
-                <div class="input-group">
-                    <label>Distance (miles)</label>
-                    <input type="number" placeholder="e.g. 4.5">
-                </div>
-                <div class="input-group">
-                    <label>Elevation Gain (ft)</label>
-                    <input type="number" placeholder="e.g. 1200">
-                </div>
-                
-                <button type="button">Update</button>
-            </form>
-        </div>
+                    <div class="input-group">
+                        <label>Flat Hiking Speed (mph)</label>
+                        <input type="number" id="flat_speed_mph" placeholder="e.g. 3.0" step="0.1">
+                    </div>
 
-        <div class="pane right-pane">
-            <div class="stats-container">
-                <h2>Outputs</h2>
-                <div class="stat-box">
-                    <span class="stat-label">Expected Pace</span>
-                    <span class="stat-value">-- : --</span>
-                </div>
+                    <div class="input-group">
+                        <label>Climbing Speed (ft/hr)</label>
+                        <input type="number" id="vertical_speed_fph" placeholder="e.g. 1000">
+                    </div>
+
+                    <div class="input-group">
+                        <label>Fitness Level (0.0 - 1.0)</label>
+                        <input type="number" id="fitness_level" placeholder="0.5" step="0.1" min="0" max="1">
+                    </div>
+                </form>
             </div>
 
+            <div class="pane middle-pane">
+                <h2>Trail Details</h2>
+                <form>
+                    <div class="input-group">
+                        <label>Activity Type</label>
+                        <select id="activity_type">
+                            <option value="hiking">Hiking</option>
+                            <option value="running">Running</option>
+                        </select>
+                    </div>
+
+                    <div class="input-group">
+                        <label>Difficulty</label>
+                        <select id="difficulty">
+                            <option value="easy">Easy</option>
+                            <option value="moderate">Moderate</option>
+                            <option value="hard">Hard</option>
+                        </select>
+                    </div>
+
+                    <div class="input-group">
+                        <label>Distance (miles)</label>
+                        <input type="number" id="distance_mi" placeholder="e.g. 5.0" step="0.1">
+                    </div>
+
+                    <div class="input-group">
+                        <label>Elevation Gain (ft)</label>
+                        <input type="number" id="elevation_gain_ft" placeholder="e.g. 1500">
+                    </div>
+                    
+                    <button type="button" id="updateBtn">Update Prediction</button>
+                </form>
+            </div>
+
+            <div class="pane right-pane">
+                <div class="stats-container">
+                    <h2>Predictions</h2>
+                    
+                    <div class="stat-box">
+                        <span class="stat-label">Est. Time</span>
+                        <span class="stat-value" id="time_hr">-- hr</span>
+                    </div>
+
+                    <div class="stat-box">
+                        <span class="stat-label">Calories Burned</span>
+                        <span class="stat-value" id="calories">-- kcal</span>
+                    </div>
+
+                    <div class="stat-box">
+                        <span class="stat-label">Fatigue Score</span>
+                        <span class="stat-value" id="fatigue">-- / 10</span>
+                    </div>
+
+                    <div class="stat-box">
+                        <span class="stat-label">Avg Pace (legacy)</span>
+                        <span class="stat-value" id="paceValue">-- : --</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="graph-card">
             <div class="graph-container">
-                <h3>Graph of Time</h3>
-                <div class="chart-placeholder">
-                    [Graph Here]
-                </div>
+                <h3>graph placeholder</h3>
+                <div class="chart-placeholder">[Graph Here]</div>
+            </div>
+            <div class="graph-container">
+                <h3>graph placeholder</h3>
+                <div class="chart-placeholder">[Graph Here]</div>
+            </div>
+            <div class="graph-container">
+                <h3>graph placeholder</h3>
+                <div class="chart-placeholder">[Graph Here]</div>
             </div>
         </div>
-    </div>
 
+    </div> 
+    <script src="script.js"></script>
 </body>
 </html>

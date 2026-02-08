@@ -7,18 +7,18 @@
 
 body {
     font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-    background-color: #eef2f5; /* Light grey background for contrast */
+    background-color: #eef2f5; /* Light grey background */
     height: 100vh;
     display: flex;
     justify-content: center; /* Center card horizontally */
     align-items: center;     /* Center card vertically */
 
-    /* --- BACKGROUND WALLPAPER --- */
+    
     background-image: url('hacklahomabackground.png');
     background-size: cover;
     background-position: center;
     
-    /* This keeps the map fixed so it doesn't move if you scroll */
+    /* keeps the map fixed so it doesn't move if you scroll */
     background-attachment: fixed;
 
     background-color: rgba(255, 255, 255, 0.9);
@@ -29,14 +29,19 @@ body {
 .main-card {
     display: flex; /* Puts the two panes side-by-side */
     background: white;
-    width: 1100px;
-    height: 550px;
+    width: 900px;
+    height: 600px;
     border-radius: 12px;
     box-shadow: 0 10px 25px rgba(0,0,0,0.1); /* shadow */
     overflow: hidden; /* ensurers corners are rounded */
 }
 
-
+.dashboard-wrapper {
+    display: flex;       
+    gap: 30px;           /* space between the two cards */
+    height: 700px;       /* height of wrapper */
+    align-items: center; 
+}
 
 /* SHARED PANE STYLES */
 .pane {
@@ -58,12 +63,13 @@ body {
 }
 
 .right-pane {
-    justify-content: space-between; 
+    justify-content: flex-start; /* Align stats to the top */
+    gap: 10px; /* space between stats and graph */
 }
 
 .middle-pane button {
     margin-top: auto; 
-    background-color: #27ae60; /* Green "Go" button */
+    background-color: #27ae60; 
 }
 
 h2 {
@@ -128,6 +134,11 @@ button:hover {
     padding: 20px;
     border-radius: 8px;
     border-left: 5px solid #3498db; 
+    margin-bottom: 20px;
+}
+
+.stats-container {
+    margin-bottom: 20px; 
 }
 
 .stat-label {
@@ -145,7 +156,7 @@ button:hover {
 }
 
 .graph-container h3 {
-    margin-bottom: 15px;
+    margin-bottom: 5px;
     color: #555;
     font-size: 1.1rem;
 }
@@ -153,7 +164,7 @@ button:hover {
 /* placeholder for where the actual chart will live later */
 .chart-placeholder {
     width: 100%;
-    height: 200px;
+    height: 180px;
     background-color: #f4f4f4;
     border: 2px dashed #ccc; 
     border-radius: 8px;
@@ -162,4 +173,27 @@ button:hover {
     align-items: center;
     color: #aaa;
     font-weight: 500;
+}
+
+.graph-card {
+    background: white;
+    width: 400px;        /* Set width for the graph column */
+    height: 800px;        /* height of card */
+    border-radius: 12px;
+    box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+    padding: 30px;       /* Internal spacing */
+    
+    /* allows scrolling if we add too many graphs */
+    overflow-y: auto;    
+    display: flex;
+    flex-direction: column;
+}
+
+.graph-container {
+    margin-bottom: 50px;
+    margin-top: 0px;
+}
+
+.graph-container:last-child {
+    margin-bottom: 0;
 }
