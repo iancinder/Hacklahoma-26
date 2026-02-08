@@ -2,7 +2,7 @@
 Energy / Calorie Calculation
 '''
 
-def estimate_calories(weight_lb, distance_mi, elevation_gain_ft, activity_type, difficulty_factor):
+def estimate_calories(weight_lb, distance_mi, elevation_gain_ft, flat_speed_mph, activity_type, difficulty_factor):
     # Base metabolic equivalent of task (MET)
     #       1 MET = energy cost of resting ≈ 1 kcal / kg / hour
     if activity_type == "hiking":
@@ -33,7 +33,11 @@ def estimate_calories(weight_lb, distance_mi, elevation_gain_ft, activity_type, 
     # Duration estimate in hours using pace
     #       For simplicity, assume average speed = flat speed
     #       Equation: duration = distance / speed
-    duration_hr = distance_mi / 4           # Simple assumption: 4 mph
+
+    if flat_speed_mph <= 0:
+        flat_speed_mph = 3.0  # Default to 3 mph if invalid input
+
+    duration_hr = distance_mi / flat_speed_mph          # duration is distance / speed
 
     # Convert weight to kg
     weight_kg = weight_lb * 0.453592        # 1 lb = 0.453592 kg
