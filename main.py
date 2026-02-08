@@ -37,8 +37,8 @@ user = {
 
 # Define trail inputs
 trail = {
-    "distance_mi": 3.8,                  # [miles]
-    "elevation_gain_ft": 78,          # [feet]
+    "distance_mi": 3.8,             # [miles]
+    "elevation_gain_ft": 78,        # [feet]
     "difficulty": "easy"            # Categories: easy, moderate, hard
 }
 
@@ -73,7 +73,7 @@ def predict():
     try:
         #Receive data from the website
         data = request.json
-        print(f"📥 Received Inputs: {data}")
+        print(f"Received Inputs: {data}")
 
         # Extract variables using defaults if inputs are empty
         # We cast to float/int because data from HTML usually strings
@@ -110,4 +110,4 @@ def predict():
 
 if __name__ == '__main__':
     print("Server is running")
-    app.run(debug=True, port=5000)
+    app.run(debug=True, port=5001)

@@ -17,7 +17,7 @@ function getFormData() {
     };
 }
 
-function updateUI() {
+function updateUI(data) {
     // updates the UI with the latest data from the server
     if(document.getElementById('time_hr')) 
         document.getElementById('time_hr').textContent = data.time_hr + " hr";
@@ -45,7 +45,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
             try {
                 // 2. Send to Python (main.py)
-                const response = await fetch('http://127.0.0.1:5000/predict', {
+                const response = await fetch('http://127.0.0.1:5001/predict', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(payload)
