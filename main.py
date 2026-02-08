@@ -26,7 +26,7 @@ from engine.energy import estimate_calories
 from engine.fatigue import estimate_fatigue
 
 # --- CONFIGURATION ---
-SERIAL_PORT = 'COM3'  # <--- DOUBLE CHECK THIS IS CORRECT!
+SERIAL_PORT = 'COM3'  
 BAUD_RATE = 115200
 
 app = Flask(__name__)
@@ -83,7 +83,6 @@ def predict():
             pace_val = 0.0
 
         # --- SEND TO ARDUINO ---
-        # We do this in a separate function to keep the code clean
         send_pace_to_arduino(pace_val)
 
         # 4. Reply to Website
