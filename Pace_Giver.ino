@@ -29,7 +29,9 @@ GPS coordinates
 
 int PACE_TOLERANCE = 10; // in percent
 int CURRENT_PACE; // in seconds
-int TARGET_PACE; // in seconds
+int TARGET_PACE = 0; // in seconds — set from Python via USB serial
+
+bool targetReceived = false; // true once Python sends a pace
 
 int MOTOR_STATE = ON_PACE; // default
 unsigned long motorNextMs = 0;
@@ -58,47 +60,63 @@ void setup() {
 void loop() {
   updateMotor();
 
-  int targetPace = 8 * 60; // minutes per mile
+  // ---- RECEIVE TARGET PACE FROM PYTHON VIA USB SERIAL ----
+  if (Serial.available() > 0) {
+    String received = Serial.readStringUntil('\n');
+    received.trim();
+
+    int newPace = received.toInt();
+    if (newPace > 0) {
+      TARGET_PACE = newPace;
+      targetReceived = true;
+      Serial.print("ACK TARGET_PACE=");
+      Serial.println(TARGET_PACE);
+
+      // Update screen immediately to show new target
+      String tarPace = "Target: " + intSecondsToStringMinutes(TARGET_PACE);
+      drawScreen(tarPace.c_str(), "READY", "Waiting for GPS...");
+    }
+  }
+
+  // ---- SHOW WAITING SCREEN IF NO TARGET YET ----
+  if (!targetReceived) {
+    drawScreen("No Target", "WAITING", "Connect to server");
+    delayWithMotor(500);
+    return;  // skip rest of loop until we get a pace
+  }
+
+  // ---- GPS PACE COMPARISON ----
+  // TODO: Replace this test data with real GPS from phone
+  // For now, cycle through test scenarios to verify the link works
 
   //////////// Speed Up Test /////////////
-  // Time 1
-  int lastTime = 0; // in seconds
+  int lastTime = 0;
   double lastLat = 35.205000;
   double lastLon = -97.445000;
-  // Time 2
-  int oneTime = 1; // in seconds
+  int oneTime = 1;
   double oneLat = 35.205025;
   double oneLon = -97.445000;
-  // Screen
-  gpsToScreenTest(lastLon, lastLat, oneLon, oneLat, lastTime, oneTime, targetPace);
-  // speedUpMotor();
+  gpsToScreenTest(lastLon, lastLat, oneLon, oneLat, lastTime, oneTime, TARGET_PACE);
   delayWithMotor(3000);
 
   //////////// On Pace Test /////////////
-  // Time 1
-  lastTime = 0; // in seconds
+  lastTime = 0;
   lastLat = 35.205000;
   lastLon = -97.445000;
-  // Time 2
-  oneTime = 1; // in seconds
+  oneTime = 1;
   oneLat = 35.205030;
   oneLon = -97.445000;
-  // Screen
-  gpsToScreenTest(lastLon, lastLat, oneLon, oneLat, lastTime, oneTime, targetPace);
+  gpsToScreenTest(lastLon, lastLat, oneLon, oneLat, lastTime, oneTime, TARGET_PACE);
   delayWithMotor(3000);
 
   //////////// Slow Down Test /////////////
-  // Time 1
-  lastTime = 0; // in seconds
+  lastTime = 0;
   lastLat = 35.205000;
   lastLon = -97.445000;
-  // Time 2
-  oneTime = 1; // in seconds
+  oneTime = 1;
   oneLat = 35.205040;
   oneLon = -97.445000;
-  // Screen
-  gpsToScreenTest(lastLon, lastLat, oneLon, oneLat, lastTime, oneTime, targetPace);
-  // slowDownMotor();
+  gpsToScreenTest(lastLon, lastLat, oneLon, oneLat, lastTime, oneTime, TARGET_PACE);
   delayWithMotor(3000);
 }
 /////////////LOOP/////////////

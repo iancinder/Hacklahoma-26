@@ -61,13 +61,37 @@
                         </select>
                     </div>
 
+                    <div class="coord-section">
+                        <label class="coord-section-label">Trail Coordinates (optional)</label>
+                        <div class="coord-row">
+                            <div class="input-group coord-input">
+                                <label>Start Lat</label>
+                                <input type="number" id="start_lat" placeholder="e.g. 35.205" step="any">
+                            </div>
+                            <div class="input-group coord-input">
+                                <label>Start Lon</label>
+                                <input type="number" id="start_lon" placeholder="e.g. -97.445" step="any">
+                            </div>
+                        </div>
+                        <div class="coord-row">
+                            <div class="input-group coord-input">
+                                <label>End Lat</label>
+                                <input type="number" id="end_lat" placeholder="e.g. 35.212" step="any">
+                            </div>
+                            <div class="input-group coord-input">
+                                <label>End Lon</label>
+                                <input type="number" id="end_lon" placeholder="e.g. -97.451" step="any">
+                            </div>
+                        </div>
+                    </div>
+
                     <div class="input-group">
-                        <label>Distance (miles)</label>
+                        <label>Distance (miles) <span class="auto-tag" id="dist_auto" style="display:none">auto</span></label>
                         <input type="number" id="distance_mi" placeholder="e.g. 5.0" step="0.1">
                     </div>
 
                     <div class="input-group">
-                        <label>Elevation Gain (ft)</label>
+                        <label>Elevation Gain (ft) <span class="auto-tag" id="elev_auto" style="display:none">auto</span></label>
                         <input type="number" id="elevation_gain_ft" placeholder="e.g. 1500">
                     </div>
                     
@@ -104,8 +128,8 @@
 
         <div class="graph-card">
             <div class="graph-container">
-                <h3>graph placeholder</h3>
-                <div class="chart-placeholder">[Graph Here]</div>
+                <h3>Elevation vs Time</h3>
+                <div class="chart-placeholder" id="elevationGraphSlot">[Graph Here]</div>
             </div>
             <div class="graph-container">
                 <h3>graph placeholder</h3>

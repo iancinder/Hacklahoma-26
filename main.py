@@ -18,14 +18,30 @@ Purpose:        This script serves as a deterministic prediction engine for a we
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 import serial
+import serial.tools.list_ports
 import time
 import pandas as pd # Needed to format data for the AI
 import joblib       # Needed to load the .pkl brain files
 import os
 
+# --- Trail module (OpenRouteService) ---
+# Wrapped in try/except so the server still starts even if trail.py has issues.
+try:
+    from engine.trail import set_api_key, fetch_route, analyze_profile, compute_elevation_vs_time, generate_elevation_time_graph
+    TRAIL_MODULE_OK = True
+except Exception as e:
+    print(f"⚠️ Trail module failed to load: {e}")
+    TRAIL_MODULE_OK = False
+
 # --- CONFIGURATION ---
-SERIAL_PORT = 'COM3'  # make sure this is the correct port
 BAUD_RATE = 115200
+
+# --- OpenRouteService API Key ---
+# Set your key here OR as an environment variable: ORS_API_KEY
+if TRAIL_MODULE_OK:
+    ORS_KEY = os.environ.get('ORS_API_KEY', None)
+    if ORS_KEY:
+        set_api_key(ORS_KEY)
 
 app = Flask(__name__)
 CORS(app)
@@ -46,21 +62,104 @@ except Exception as e:
     model_cals = None
     model_fatigue = None
 
-def send_pace_to_arduino(pace_value):
-    """
-    Sends the calculated pace to the watch via USB.
-    """
+# --- PERSISTENT ARDUINO CONNECTION ---
+# We scan all COM ports at startup to find the ESP32 automatically.
+# The connection stays open so there's no 2-second reset on every request.
+arduino_conn = None
+
+# Keywords that typically appear in ESP32 / Arduino USB serial device descriptions
+ESP32_KEYWORDS = ['esp32', 'cp210', 'ch340', 'ch910', 'usb serial', 'uart', 'usb-serial']
+
+def connect_arduino():
+    """Auto-detect and connect to the Arduino/ESP32 on any COM port."""
+    global arduino_conn
+
+    ports = serial.tools.list_ports.comports()
+    if not ports:
+        print("⚠️ No COM ports found. Server will run without hardware.")
+        arduino_conn = None
+        return False
+
+    print(f"🔍 Scanning {len(ports)} COM port(s) for Arduino/ESP32...")
+
+    # Pass 1: Try ports whose description matches known ESP32 / USB-serial chips
+    for port in ports:
+        desc = (port.description or '').lower()
+        print(f"   {port.device}: {port.description}")
+        if any(kw in desc for kw in ESP32_KEYWORDS):
+            if _try_connect(port.device):
+                return True
+
+    # Pass 2: If no known device matched, try every remaining port as fallback
+    for port in ports:
+        desc = (port.description or '').lower()
+        if not any(kw in desc for kw in ESP32_KEYWORDS):
+            if _try_connect(port.device):
+                return True
+
+    print("⚠️ Could not connect to any COM port. Server will run without hardware.")
+    print("   Plug in the ESP32 and restart to enable.")
+    arduino_conn = None
+    return False
+
+def _try_connect(port_name):
+    """Attempt to open a serial connection on the given port."""
+    global arduino_conn
     try:
-        arduino = serial.Serial(SERIAL_PORT, BAUD_RATE, timeout=2)
-        time.sleep(2) 
-        msg = f"{pace_value}\n"
-        arduino.write(msg.encode('utf-8'))
-        print(f"Sent to Watch: {msg.strip()}")
-        arduino.close()
+        arduino_conn = serial.Serial(port_name, BAUD_RATE, timeout=2)
+        time.sleep(2)  # wait for ESP32 to boot after initial connection
+        print(f"🔌 Arduino connected on {port_name}")
+
+        # Drain any startup messages from the Arduino
+        while arduino_conn.in_waiting > 0:
+            line = arduino_conn.readline().decode('utf-8', errors='replace').strip()
+            if line:
+                print(f"   [Arduino boot] {line}")
+
         return True
     except Exception as e:
-        print(f"USB Error: {e}")
+        print(f"   ✗ {port_name} failed: {e}")
+        arduino_conn = None
         return False
+
+def send_pace_to_arduino(pace_value):
+    """
+    Sends the calculated pace to the watch via persistent USB connection.
+    Also reads back any response from the Arduino for debugging.
+    """
+    global arduino_conn
+    if arduino_conn is None:
+        print("   [Arduino] Skipped — not connected")
+        return False
+
+    try:
+        msg = f"PACE,{pace_value}\n"
+        arduino_conn.write(msg.encode('utf-8'))
+        print(f"   [Arduino] Sent: {msg.strip()}")
+
+        # Give Arduino a moment to process and respond
+        time.sleep(0.1)
+
+        # Read back any debug/ACK messages from Arduino
+        while arduino_conn.in_waiting > 0:
+            response = arduino_conn.readline().decode('utf-8', errors='replace').strip()
+            if response:
+                print(f"   [Arduino] Received: {response}")
+
+        return True
+    except Exception as e:
+        print(f"   [Arduino] Send failed: {e}")
+        # Connection may be broken — try to reconnect next time
+        try:
+            arduino_conn.close()
+        except:
+            pass
+        arduino_conn = None
+        print("   [Arduino] Connection lost. Will skip until server restart.")
+        return False
+
+# Try to connect at startup (non-blocking if no device)
+connect_arduino()
 
 @app.route('/predict', methods=['POST'])
 def predict():
@@ -68,54 +167,98 @@ def predict():
         data = request.json
         print(f"Received Inputs: {data}")
 
+        # ---- OPTIONAL: Fetch trail from OpenRouteService ----
+        trail_data = None
+        trail_segments = None
+
+        start_lat = data.get('start_lat')
+        start_lon = data.get('start_lon')
+        end_lat   = data.get('end_lat')
+        end_lon   = data.get('end_lon')
+
+        # Only call ORS if ALL four coordinate fields are filled AND trail module loaded
+        has_coords = (start_lat and start_lon and end_lat and end_lon)
+
+        if has_coords and TRAIL_MODULE_OK:
+            try:
+                print("Fetching trail from OpenRouteService...")
+                coords = fetch_route(
+                    float(start_lon), float(start_lat),
+                    float(end_lon),   float(end_lat)
+                )
+                trail_data = analyze_profile(coords)
+                trail_segments = trail_data["segments"]
+                print(f"Trail fetched: {trail_data['distance_mi']} mi, "
+                      f"{trail_data['elevation_gain_ft']} ft gain")
+            except Exception as trail_err:
+                print(f"⚠️ Trail fetch failed (falling back to manual inputs): {trail_err}")
+        elif has_coords and not TRAIL_MODULE_OK:
+            print("⚠️ Coordinates provided but trail module not loaded, using manual inputs.")
+
         # 1. PARSE INPUTS
-        # We need to grab the data and put it into a format the AI understands.
-        # The AI expects a "DataFrame" with specific column names.
-        
-        # Create a single-row DataFrame with the exact column names from training
+        # If we got trail data from ORS, use it; otherwise fall back to manual inputs.
+        distance_mi      = trail_data["distance_mi"]      if trail_data else float(data.get('distance_mi') or 5.0)
+        elevation_gain_ft = trail_data["elevation_gain_ft"] if trail_data else float(data.get('elevation_gain_ft') or 1000)
+
         input_df = pd.DataFrame([{
-            'weight_lb': float(data.get('weight_lb') or 160),
-            'age': float(data.get('age') or 22),
-            'fitness_level': float(data.get('fitness_level') or 0.5),
-            'distance_mi': float(data.get('distance_mi') or 5.0),
-            'elevation_gain_ft': float(data.get('elevation_gain_ft') or 1000),
-            'flat_speed_mph': float(data.get('flat_speed_mph') or 3.0),
+            'weight_lb':          float(data.get('weight_lb') or 160),
+            'age':                float(data.get('age') or 22),
+            'fitness_level':      float(data.get('fitness_level') or 0.5),
+            'distance_mi':        distance_mi,
+            'elevation_gain_ft':  elevation_gain_ft,
+            'flat_speed_mph':     float(data.get('flat_speed_mph') or 3.0),
             'vertical_speed_fph': float(data.get('vertical_speed_fph') or 1000),
-            'difficulty': data.get('difficulty') or 'moderate',      # Pass string directly!
-            'activity_type': data.get('activity_type') or 'hiking'   # Pass string directly!
+            'difficulty':         data.get('difficulty') or 'moderate',
+            'activity_type':      data.get('activity_type') or 'hiking'
         }])
 
         # 2. ASK THE AI FOR PREDICTIONS
         if model_time is not None:
-            # .predict() returns a list, so we take the first item [0]
-            pred_time = model_time.predict(input_df)[0]
-            pred_cals = model_cals.predict(input_df)[0]
+            pred_time    = model_time.predict(input_df)[0]
+            pred_cals    = model_cals.predict(input_df)[0]
             pred_fatigue = model_fatigue.predict(input_df)[0]
         else:
             return jsonify({"error": "Models are not loaded on the server."}), 500
 
         # 3. CALCULATE PACE (Derived from Time)
-        # Pace = (Total Minutes) / Distance
         dist = input_df['distance_mi'][0]
+        pace_val = 0.0
+        # 3600 converts hours to seconds
+        # round() gets us to the nearest whole number
+        # int() ensures the data type is strictly an integer
         if dist > 0:
-            pace_val = round((pred_time * 60) / dist, 1)
+            pace_val = int(round((pred_time * 3600) / dist))
         else:
-            pace_val = 0.0
+            pace_val = 0
 
         # --- SEND TO ARDUINO ---
-        # Only send if we are running locally with a USB device attached
-        # send_pace_to_arduino(pace_val) 
+        print(f"   [Arduino] Pace to send: {pace_val} sec/mi "
+              f"({pace_val // 60}:{pace_val % 60:02d} min/mi)")
+        send_pace_to_arduino(pace_val)
 
-        # 4. REPLY TO FRONTEND
+        # 4. BUILD RESPONSE
         response = {
-            "time_hr": round(pred_time, 2),
+            "time_hr":  round(pred_time, 2),
             "calories": int(pred_cals),
-            "fatigue": round(pred_fatigue * 10, 1), # Scale 0-1 to 0-10 for UI
-            "pace": pace_val,
-            "method": "AI_Prediction" # Just for debugging so you know it worked
+            "fatigue":  round(pred_fatigue * 10, 1),
+            "pace":     pace_val,
+            "method":   "AI_Prediction"
         }
-        
-        print(f"Sending Response: {response}")
+
+        # 5. If we have trail segments, auto-fill trail info + generate graph
+        if trail_segments and pace_val > 0:
+            response["trail_distance_mi"]      = trail_data["distance_mi"]
+            response["trail_elevation_gain_ft"] = trail_data["elevation_gain_ft"]
+            response["trail_elevation_loss_ft"] = trail_data["elevation_loss_ft"]
+
+            try:
+                time_elev = compute_elevation_vs_time(trail_segments, pace_val)
+                response["elevation_graph"] = generate_elevation_time_graph(time_elev)
+                print(f"Graph generated: {len(response['elevation_graph'])} chars")
+            except Exception as graph_err:
+                print(f"⚠️ Graph generation failed: {graph_err}")
+
+        print(f"Sending Response (graph included: {('elevation_graph' in response)})")
         return jsonify(response)
 
     except Exception as e:

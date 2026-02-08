@@ -1,7 +1,7 @@
 import serial
 import time
 
-SERIAL_PORT = 'COM3'  # <--- CHECK THIS!
+SERIAL_PORT = 'COM4'  # <--- CHECK THIS!
 BAUD_RATE = 115200
 
 try:
