@@ -15,60 +15,44 @@ Purpose:        This script serves as a deterministic prediction engine for a we
                 - Estimated fatigue points
 '''
 
-# Import necessary libraries
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 import serial
 import time
 
-# Declare engine package files
+# Import engine files
 from engine.pace import estimate_time
 from engine.energy import estimate_calories
 from engine.fatigue import estimate_fatigue
 
-# --- 1. INITIAL SETUP & TESTING ---
-# We run a quick test calculation on startup to make sure math works
-print("--- RUNNING STARTUP DIAGNOSTICS ---")
-
-user = {
-    "age": 22, "weight_lb": 160, "flat_speed_mph": 3.0,
-    "vertical_speed_fph": 1000, "fitness_level": 0.5
-}
-trail = { "distance_mi": 5.0, "elevation_gain_ft": 1500, "difficulty": "easy" }
-app_inputs = { "activity_type": "hiking" }
-
-# Call functions to verify imports work
-try:
-    t_test = estimate_time(trail["distance_mi"], trail["elevation_gain_ft"],
-                           user["flat_speed_mph"], user["vertical_speed_fph"],
-                           trail["difficulty"], user["fitness_level"], app_inputs["activity_type"])
-    c_test = estimate_calories(user["weight_lb"], trail["distance_mi"], trail["elevation_gain_ft"],
-                               user["flat_speed_mph"], app_inputs["activity_type"], trail["difficulty"])
-    f_test = estimate_fatigue(c_test, user["weight_lb"], user["age"], user["fitness_level"])
-    
-    print(f"Diagnostics Passed: Time={t_test:.2f}h, Cals={c_test:.0f}, Fatigue={f_test:.2f}")
-except Exception as e:
-    print(f"!!! DIAGNOSTICS FAILED: {e} !!!")
-
-# --- 2. WEB SERVER SETUP ---
-app = Flask(__name__)
-CORS(app)
-
-SERIAL_PORT = 'COM3' 
+# --- CONFIGURATION ---
+SERIAL_PORT = 'COM3'  # <--- DOUBLE CHECK THIS IS CORRECT!
 BAUD_RATE = 115200
 
-# Try to connect to Arduino on startup
-arduino = None
-try:
-    arduino = serial.Serial(SERIAL_PORT, BAUD_RATE, timeout=1)
-    time.sleep(2) # Wait for Arduino to reset/wake up
-    print(f"✅ Successfully connected to Arduino on {SERIAL_PORT}")
-except Exception as e:
-    print(f"⚠️ Could not connect to Arduino: {e}")
-    print("Server will run, but Pace won't be sent to watch.")
-
 app = Flask(__name__)
 CORS(app)
+
+def send_pace_to_arduino(pace_value):
+    """
+    Opens the USB connection, sends the number, and closes it.
+    This is safer than keeping it open forever.
+    """
+    try:
+        # 1. Open Connection
+        arduino = serial.Serial(SERIAL_PORT, BAUD_RATE, timeout=2)
+        time.sleep(2) # Wait for Arduino to reset
+        
+        # 2. Send Data
+        msg = f"{pace_value}\n"
+        arduino.write(msg.encode('utf-8'))
+        print(f"✅ Sent to Watch: {msg.strip()}")
+        
+        # 3. Close Connection
+        arduino.close()
+        return True
+    except Exception as e:
+        print(f"USB Error: {e}")
+        return False
 
 @app.route('/predict', methods=['POST'])
 def predict():
@@ -94,18 +78,13 @@ def predict():
 
         # 3. Calculate Pace
         if p_dist > 0:
-            pace_val = round((calc_time * 60) / p_dist, 0)
+            pace_val = round((calc_time * 60) / p_dist, 1) # Round to 1 decimal place
         else:
-            pace_val = 0
+            pace_val = 0.0
 
-        # --- SEND TO ARDUINO (USB) ---
-        if arduino and arduino.is_open:
-            # We send the number followed by a newline so Arduino knows it's done
-            msg = f"{pace_val}\n"
-            arduino.write(msg.encode('utf-8'))
-            print(f"Sent to Watch: {msg.strip()}")
-        else:
-            print("Skipping USB send (Arduino not connected)")
+        # --- SEND TO ARDUINO ---
+        # We do this in a separate function to keep the code clean
+        send_pace_to_arduino(pace_val)
 
         # 4. Reply to Website
         return jsonify({
@@ -121,4 +100,5 @@ def predict():
 
 if __name__ == '__main__':
     print("Server is running on Port 5001")
+    # use_reloader=False prevents the "Double Start" bug that locks the USB port
     app.run(debug=True, use_reloader=False, port=5001)
