@@ -30,7 +30,7 @@ try:
     from engine.trail import set_api_key, fetch_route, analyze_profile, compute_elevation_vs_time, generate_elevation_time_graph
     TRAIL_MODULE_OK = True
 except Exception as e:
-    print(f"⚠️ Trail module failed to load: {e}")
+    print(f"[WARN] Trail module failed to load: {e}")
     TRAIL_MODULE_OK = False
 
 # --- CONFIGURATION ---
@@ -61,9 +61,9 @@ try:
 
     # Track mtimes so we can hot-reload the time model after retraining
     model_time_mtime = os.path.getmtime(MODEL_TIME_PATH)
-    print("✅ AI Models Loaded Successfully!")
+    print("[OK] AI Models Loaded Successfully!")
 except Exception as e:
-    print(f"❌ Could not load models. {e}")
+    print(f"[ERROR] Could not load models. {e}")
     print("Did you run 'train_model.py'?")
     # If models fail, we set them to None and handle it later
     model_time = None
@@ -87,9 +87,9 @@ def maybe_reload_time_model():
         if model_time_mtime is None or cur_mtime > model_time_mtime:
             model_time = joblib.load(MODEL_TIME_PATH)
             model_time_mtime = cur_mtime
-            print(f"♻️ Reloaded time model from disk (mtime={model_time_mtime})")
+            print(f"[RELOAD] Reloaded time model from disk (mtime={model_time_mtime})")
     except Exception as e:
-        print(f"⚠️ Could not reload time model: {e}")
+        print(f"[WARN] Could not reload time model: {e}")
 
 # --- PERSISTENT ARDUINO CONNECTION ---
 # We scan all COM ports at startup to find the ESP32 automatically.
@@ -105,11 +105,11 @@ def connect_arduino():
 
     ports = serial.tools.list_ports.comports()
     if not ports:
-        print("⚠️ No COM ports found. Server will run without hardware.")
+        print("[WARN] No COM ports found. Server will run without hardware.")
         arduino_conn = None
         return False
 
-    print(f"🔍 Scanning {len(ports)} COM port(s) for Arduino/ESP32...")
+    print(f"[SCAN] Scanning {len(ports)} COM port(s) for Arduino/ESP32...")
 
     # Pass 1: Try ports whose description matches known ESP32 / USB-serial chips
     for port in ports:
@@ -126,7 +126,7 @@ def connect_arduino():
             if _try_connect(port.device):
                 return True
 
-    print("⚠️ Could not connect to any COM port. Server will run without hardware.")
+    print("[WARN] Could not connect to any COM port. Server will run without hardware.")
     print("   Plug in the ESP32 and restart to enable.")
     arduino_conn = None
     return False
@@ -137,7 +137,7 @@ def _try_connect(port_name):
     try:
         arduino_conn = serial.Serial(port_name, BAUD_RATE, timeout=2)
         time.sleep(2)  # wait for ESP32 to boot after initial connection
-        print(f"🔌 Arduino connected on {port_name}")
+        print(f"[OK] Arduino connected on {port_name}")
 
         # Drain any startup messages from the Arduino
         while arduino_conn.in_waiting > 0:
@@ -223,9 +223,9 @@ def predict():
                 print(f"Trail fetched: {trail_data['distance_mi']} mi, "
                       f"{trail_data['elevation_gain_ft']} ft gain")
             except Exception as trail_err:
-                print(f"⚠️ Trail fetch failed (falling back to manual inputs): {trail_err}")
+                print(f"[WARN] Trail fetch failed (falling back to manual inputs): {trail_err}")
         elif has_coords and not TRAIL_MODULE_OK:
-            print("⚠️ Coordinates provided but trail module not loaded, using manual inputs.")
+            print("[WARN] Coordinates provided but trail module not loaded, using manual inputs.")
 
         # 1. PARSE INPUTS
         # If we got trail data from ORS, use it; otherwise fall back to manual inputs.
@@ -300,13 +300,13 @@ def predict():
                 response["elevation_graph"] = generate_elevation_time_graph(time_elev)
                 print(f"Graph generated: {len(response['elevation_graph'])} chars")
             except Exception as graph_err:
-                print(f"⚠️ Graph generation failed: {graph_err}")
+                print(f"[WARN] Graph generation failed: {graph_err}")
 
         print(f"Sending Response (graph included: {('elevation_graph' in response)})")
         return jsonify(response)
 
     except Exception as e:
-        print(f"❌ Error during prediction: {e}")
+        print(f"[ERROR] Error during prediction: {e}")
         return jsonify({"error": str(e)}), 500
 
 if __name__ == '__main__':

@@ -172,18 +172,32 @@ def generate_elevation_time_graph(time_elev_data):
         times_display = times
         time_label = "Time (minutes)"
 
-    fig, ax = plt.subplots(figsize=(4.8, 2.6), dpi=130)
+    # Normalize elevations so the y-axis naturally spans only the
+    # elevation *change*, then relabel ticks with real values.
+    # This avoids any set_ylim issues with matplotlib.
+    elev_min = min(elevations)
+    elevations_shifted = [e - elev_min for e in elevations]
 
-    # Colour segments by uphill (red-ish) / downhill (green-ish)
+    fig = plt.figure(figsize=(4.8, 2.6), dpi=130)
+    ax = fig.add_subplot(111)
+
+    # Colour-code uphill (red) vs downhill (green) segments
     for i in range(1, len(times_display)):
-        color = '#e74c3c' if elevations[i] >= elevations[i - 1] else '#27ae60'
+        color = '#e74c3c' if elevations_shifted[i] >= elevations_shifted[i - 1] else '#27ae60'
         ax.fill_between(
             times_display[i - 1:i + 1],
-            elevations[i - 1:i + 1],
-            alpha=0.25, color=color
+            [0, 0],
+            elevations_shifted[i - 1:i + 1],
+            alpha=0.30, color=color
         )
 
-    ax.plot(times_display, elevations, color='#2c3e50', linewidth=1.5)
+    # Main elevation line
+    ax.plot(times_display, elevations_shifted, color='#2c3e50', linewidth=1.5)
+
+    # Relabel y-ticks to show actual elevation (add elev_min back)
+    ax.yaxis.set_major_formatter(
+        plt.FuncFormatter(lambda y, _: f'{int(y + elev_min)}')
+    )
 
     ax.set_xlabel(time_label, fontsize=9, color='#555')
     ax.set_ylabel("Elevation (ft)", fontsize=9, color='#555')
@@ -197,7 +211,7 @@ def generate_elevation_time_graph(time_elev_data):
     fig.tight_layout()
 
     buf = io.BytesIO()
-    fig.savefig(buf, format='png', bbox_inches='tight', facecolor='white')
+    fig.savefig(buf, format='png', facecolor='white')
     plt.close(fig)
     buf.seek(0)
 

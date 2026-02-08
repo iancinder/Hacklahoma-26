@@ -178,7 +178,7 @@ button:hover {
 .graph-card {
     background: white;
     width: 400px;        /* Set width for the graph column */
-    height: 800px;        /* height of card */
+    height: 300px;        /* height of card */
     border-radius: 12px;
     box-shadow: 0 10px 25px rgba(0,0,0,0.1);
     padding: 30px;       /* Internal spacing */
