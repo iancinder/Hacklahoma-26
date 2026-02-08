@@ -50,9 +50,17 @@ CORS(app)
 # We load these once when the server starts so it's fast.
 try:
     # Load the "Brains"
-    model_time = joblib.load('model_time.pkl')
-    model_cals = joblib.load('model_calories.pkl')
-    model_fatigue = joblib.load('model_fatigue.pkl')
+    base_dir = os.path.dirname(os.path.abspath(__file__))
+    MODEL_TIME_PATH = os.path.join(base_dir, 'model_time.pkl')
+    MODEL_CALS_PATH = os.path.join(base_dir, 'model_calories.pkl')
+    MODEL_FATIGUE_PATH = os.path.join(base_dir, 'model_fatigue.pkl')
+
+    model_time = joblib.load(MODEL_TIME_PATH)
+    model_cals = joblib.load(MODEL_CALS_PATH)
+    model_fatigue = joblib.load(MODEL_FATIGUE_PATH)
+
+    # Track mtimes so we can hot-reload the time model after retraining
+    model_time_mtime = os.path.getmtime(MODEL_TIME_PATH)
     print("✅ AI Models Loaded Successfully!")
 except Exception as e:
     print(f"❌ Could not load models. {e}")
@@ -61,6 +69,27 @@ except Exception as e:
     model_time = None
     model_cals = None
     model_fatigue = None
+
+    MODEL_TIME_PATH = None
+    model_time_mtime = None
+
+
+def maybe_reload_time_model():
+    """
+    If `model_time.pkl` was retrained while the server is running,
+    reload it so the website reflects changes without restarting Flask.
+    """
+    global model_time, model_time_mtime
+    if MODEL_TIME_PATH is None or model_time is None:
+        return
+    try:
+        cur_mtime = os.path.getmtime(MODEL_TIME_PATH)
+        if model_time_mtime is None or cur_mtime > model_time_mtime:
+            model_time = joblib.load(MODEL_TIME_PATH)
+            model_time_mtime = cur_mtime
+            print(f"♻️ Reloaded time model from disk (mtime={model_time_mtime})")
+    except Exception as e:
+        print(f"⚠️ Could not reload time model: {e}")
 
 # --- PERSISTENT ARDUINO CONNECTION ---
 # We scan all COM ports at startup to find the ESP32 automatically.
@@ -164,6 +193,9 @@ connect_arduino()
 @app.route('/predict', methods=['POST'])
 def predict():
     try:
+        # Ensure latest time model is used after retraining
+        maybe_reload_time_model()
+
         data = request.json
         print(f"Received Inputs: {data}")
 
@@ -222,7 +254,7 @@ def predict():
 
         # 3. CALCULATE PACE (Derived from Time)
         dist = input_df['distance_mi'][0]
-        pace_val = 0.0
+        pace_val = 0
         # 3600 converts hours to seconds
         # round() gets us to the nearest whole number
         # int() ensures the data type is strictly an integer
@@ -230,6 +262,12 @@ def predict():
             pace_val = int(round((pred_time * 3600) / dist))
         else:
             pace_val = 0
+
+        # For UI convenience, also provide formatted pace in min/mi.
+        pace_min = pace_val // 60
+        pace_sec = pace_val % 60
+        pace_min_per_mi_str = f"{pace_min}:{pace_sec:02d}"
+        pace_min_per_mi_float = round(pace_val / 60.0, 2) if pace_val > 0 else 0.0
 
         # --- SEND TO ARDUINO ---
         print(f"   [Arduino] Pace to send: {pace_val} sec/mi "
@@ -241,7 +279,12 @@ def predict():
             "time_hr":  round(pred_time, 2),
             "calories": int(pred_cals),
             "fatigue":  round(pred_fatigue * 10, 1),
-            "pace":     pace_val,
+            # Keep explicit units in response:
+            "pace_sec_per_mi": pace_val,
+            "pace_min_per_mi": pace_min_per_mi_float,
+            "pace_min_per_mi_str": pace_min_per_mi_str,
+            # Debug: helps confirm which model the server used
+            "time_model_mtime": model_time_mtime,
             "method":   "AI_Prediction"
         }
 
@@ -252,7 +295,8 @@ def predict():
             response["trail_elevation_loss_ft"] = trail_data["elevation_loss_ft"]
 
             try:
-                time_elev = compute_elevation_vs_time(trail_segments, pace_val)
+                # ORS graph expects pace in minutes per mile (not seconds)
+                time_elev = compute_elevation_vs_time(trail_segments, pace_val / 60.0)
                 response["elevation_graph"] = generate_elevation_time_graph(time_elev)
                 print(f"Graph generated: {len(response['elevation_graph'])} chars")
             except Exception as graph_err:

@@ -85,7 +85,9 @@ def generate_dataset():
     df['elevation_gain_ft'] = df['elevation_gain_ft'].round(0)
     df['distance_mi'] = df['distance_mi'].round(2)
 
-    filename = 'hiking_dataset_100k.csv'
+    # Always save next to this script (repo root), regardless of current working directory.
+    base_dir = os.path.dirname(os.path.abspath(__file__))
+    filename = os.path.join(base_dir, 'hiking_dataset_100k.csv')
     df.to_csv(filename, index=False)
     print(f"Done. Saved {NUM_SAMPLES} rows to '{filename}'")
 

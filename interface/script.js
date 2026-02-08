@@ -40,8 +40,17 @@ function updateUI(data) {
     if(document.getElementById('fatigue')) 
         document.getElementById('fatigue').textContent = data.fatigue + " / 10";
     
-    if(document.getElementById('paceValue')) 
-        document.getElementById('paceValue').textContent = data.pace + " seconds/mi";
+    if(document.getElementById('paceValue')) {
+        // Get pace in seconds per mile from whichever field the server sends
+        let totalSec = data.pace_sec_per_mi || data.pace || 0;
+        if (totalSec > 0) {
+            const m = Math.floor(totalSec / 60);
+            const s = Math.floor(totalSec % 60);
+            document.getElementById('paceValue').textContent = m + ":" + String(s).padStart(2, '0') + " min/mi";
+        } else {
+            document.getElementById('paceValue').textContent = "-- : --";
+        }
+    }
 
     // Reset auto badges (hide until trail data confirms them)
     document.getElementById('dist_auto').style.display = 'none';
@@ -97,6 +106,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 // 3. Get Answer
                 const result = await response.json();
                 console.log("Response:", result);
+                console.log("Pace (sec/mi):", result.pace_sec_per_mi, "Formatted:", result.pace_min_per_mi_str);
 
                 if(result.error) {
                     alert("Error: " + result.error);

@@ -4,11 +4,15 @@ from sklearn.ensemble import RandomForestRegressor
 from sklearn.preprocessing import OneHotEncoder
 from sklearn.compose import ColumnTransformer
 from sklearn.pipeline import Pipeline
+import os
+import numpy as np
 
 def train_models():
     print("Loading dataset...")
     try:
-        df = pd.read_csv('hiking_dataset_100k.csv')
+        # Always load dataset from the repo directory (next to this script)
+        base_dir = os.path.dirname(os.path.abspath(__file__))
+        df = pd.read_csv(os.path.join(base_dir, 'hiking_dataset_100k.csv'))
     except FileNotFoundError:
         print("Error: 'hiking_dataset_100k.csv' not found. Run generate_data.py first.")
         return
@@ -42,21 +46,20 @@ def train_models():
     # --- 3. TRAIN & SAVE (3 Separate Models) ---
     
     # Model 1: Time
-    print("Training Pace Model")
-    model_pipeline.fit(X, df['time_hr'])
-    joblib.dump(model_pipeline, 'model_time.pkl')
+    print("Training Time/Pace Model")
+    y_time = df['time_hr']
 
-    # Model 2: Calories
-    print("Training Calorie Model")
-    model_pipeline.fit(X, df['calories'])
-    joblib.dump(model_pipeline, 'model_calories.pkl')
+    # Optional bias: weight faster examples more heavily so the model
+    # is less likely to systematically overestimate time (i.e., predict too slow).
+    # Normalize weights to mean 1 and clamp to avoid extreme influence.
+    weights = (1.0 / y_time).to_numpy()
+    weights = weights / np.mean(weights)
+    weights = np.clip(weights, 0.5, 2.0)
 
-    # Model 3: Fatigue
-    print("Training Fatigue Model")
-    model_pipeline.fit(X, df['fatigue_score'])
-    joblib.dump(model_pipeline, 'model_fatigue.pkl')
-
-    print("Success. Created 'model_time.pkl', 'model_calories.pkl', and 'model_fatigue.pkl'")
+    model_pipeline.fit(X, y_time, regressor__sample_weight=weights)
+    model_path = os.path.join(base_dir, 'model_time.pkl')
+    joblib.dump(model_pipeline, model_path)
+    print(f"Success. Created '{model_path}'")
 
 if __name__ == "__main__":
     train_models()
