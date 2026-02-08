@@ -25,9 +25,15 @@ GPS coordinates
 #define SLOW_DOWN 2
 #define ON_PACE 3
 
+#define MOTOR_PIN D2
+
 int PACE_TOLERANCE = 10; // in percent
 int CURRENT_PACE; // in seconds
 int TARGET_PACE; // in seconds
+
+int MOTOR_STATE = ON_PACE; // default
+unsigned long motorNextMs = 0;
+int motorStep = 0;
 
 Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
 
@@ -37,24 +43,63 @@ void setup() {
   // XIAO ESP32-C6 I2C pins
   Wire.begin(D4, D5);
   delay(100);
-
   if (!display.begin(SSD1306_SWITCHCAPVCC, SCREEN_ADDRESS)) {
     Serial.println("SSD1306 init failed");
     while (1)
       ;
   }
-
   drawScreen("Target: ", "BOOTING", "Current: ");
+
+  pinMode(MOTOR_PIN, OUTPUT);
+  analogWrite(MOTOR_PIN, 0);
 }
 
 /////////////LOOP/////////////
 void loop() {
-  slowDownTest();
-  delay(2000);
-  onPaceTest();
-  delay(2000);
-  speedUpTest();
-  delay(2000);
+  updateMotor();
+
+  int targetPace = 8 * 60; // minutes per mile
+
+  //////////// Speed Up Test /////////////
+  // Time 1
+  int lastTime = 0; // in seconds
+  double lastLat = 35.205000;
+  double lastLon = -97.445000;
+  // Time 2
+  int oneTime = 1; // in seconds
+  double oneLat = 35.205025;
+  double oneLon = -97.445000;
+  // Screen
+  gpsToScreenTest(lastLon, lastLat, oneLon, oneLat, lastTime, oneTime, targetPace);
+  // speedUpMotor();
+  delayWithMotor(3000);
+
+  //////////// On Pace Test /////////////
+  // Time 1
+  lastTime = 0; // in seconds
+  lastLat = 35.205000;
+  lastLon = -97.445000;
+  // Time 2
+  oneTime = 1; // in seconds
+  oneLat = 35.205030;
+  oneLon = -97.445000;
+  // Screen
+  gpsToScreenTest(lastLon, lastLat, oneLon, oneLat, lastTime, oneTime, targetPace);
+  delayWithMotor(3000);
+
+  //////////// Slow Down Test /////////////
+  // Time 1
+  lastTime = 0; // in seconds
+  lastLat = 35.205000;
+  lastLon = -97.445000;
+  // Time 2
+  oneTime = 1; // in seconds
+  oneLat = 35.205040;
+  oneLon = -97.445000;
+  // Screen
+  gpsToScreenTest(lastLon, lastLat, oneLon, oneLat, lastTime, oneTime, targetPace);
+  // slowDownMotor();
+  delayWithMotor(3000);
 }
 /////////////LOOP/////////////
 
@@ -67,6 +112,10 @@ static inline double mpsToKph(double mps) {
 }
 static inline double mpsToMph(double mps) { 
   return mps * 2.2369362920544; 
+}
+int metersAndSecToSecPerMile(double meters, int seconds) {
+  if (meters <= 0.0 || seconds <= 0) return 9999;  // invalid / stopped
+  return (int)round((1609.344 * seconds) / meters);
 }
 int percentFromTarget() {
   // negative percent means you're going faster so slow down
@@ -82,6 +131,35 @@ String intSecondsToStringMinutes(int seconds) {
   str += String(leftoverSeconds);
   return str;
 }
+
+// meters between two lat/lon points (degrees)
+double haversineMeters(double lat1, double lon1, double lat2, double lon2) {
+  const double R = 6371000.0; // Earth radius (m)
+  double dLat = deg2rad(lat2 - lat1);
+  double dLon = deg2rad(lon2 - lon1);
+
+  double a = sin(dLat/2) * sin(dLat/2) +
+             cos(deg2rad(lat1)) * cos(deg2rad(lat2)) *
+             sin(dLon/2) * sin(dLon/2);
+
+  double c = 2.0 * atan2(sqrt(a), sqrt(1.0 - a));
+  return R * c;
+}
+
+// returns speed in meters/second, or NAN if unusable
+double speedMpsFromFixes(double lastLat, double lastLon, uint32_t lastMs,
+                         double curLat,  double curLon,  uint32_t curMs) {
+  uint32_t dtMs = curMs - lastMs;  // ok with uint32 wrap if curMs is later
+  if (dtMs < 300) return NAN;      // too soon (GPS jitter dominates)
+
+  double dt = dtMs / 1000.0;
+  double d  = haversineMeters(lastLat, lastLon, curLat, curLon);
+
+  // jitter guard: ignore tiny motion over short windows
+  if (d < 0.7 && dt < 2.0) return 0.0;
+
+  return d / dt;
+}
 // ---------- End Helpers ----------
 
 
@@ -93,15 +171,19 @@ void setScreen(int percent) {
 
   if (abs(percent) < PACE_TOLERANCE) {
     drawScreen(tarPace.c_str(), "ON PACE", curPace.c_str());
+    setMotorState(ON_PACE);
   }
   else if (percent > PACE_TOLERANCE) {
     drawScreen(tarPace.c_str(), "SPD UP", curPace.c_str());
+    setMotorState(SPEED_UP);
   }
   else if (percent < -PACE_TOLERANCE) {
     drawScreen(tarPace.c_str(), "SLW DWN", curPace.c_str());
+    setMotorState(SLOW_DOWN);
   }
   else { // failsafe
     drawScreen("ERROR", "ERROR", "ERROR");
+    analogWrite(MOTOR_PIN, 0);
   }
 }
 
@@ -139,32 +221,76 @@ void drawScreen(const char* top,
   display.display();
 }
 
-void speedUpTest(){
-  int current = 9*60; // 9 min
-  int target = 8*60; // 8 min
-
+void timeToScreenTest(int current, int target) {
   CURRENT_PACE = current;
   TARGET_PACE = target;
 
   setScreen(percentFromTarget());
 }
 
-void onPaceTest(){
-  int current = 9*60; // 9 min
-  int target = 9*60; // 9 min
-
-  CURRENT_PACE = current;
-  TARGET_PACE = target;
-
+void gpsToScreenTest(double lastLon, double lastLat, double oneLon, double oneLat, int lastTime, int oneTime, int targetPace) {
+  double metersCovered = haversineMeters(lastLat, lastLon, oneLat, oneLon); // gives meters
+  int currentPace = metersAndSecToSecPerMile(metersCovered, (oneTime - lastTime));
+  CURRENT_PACE = currentPace;
+  TARGET_PACE = targetPace;
   setScreen(percentFromTarget());
 }
 
-void slowDownTest(){
-  int current = 8*60; // 9 min
-  int target = 9*60; // 9 min
+// void slowDownMotor() {
+//   // Ramp DOWN
+//   for (int duty = 255; duty >= 0; duty -= 5) {
+//     analogWrite(MOTOR_PIN, duty);
+//     delay(20);
+//   }
+// }
 
-  CURRENT_PACE = current;
-  TARGET_PACE = target;
+// void speedUpMotor() {
+//   // Ramp UP
+//   for (int duty = 0; duty <= 255; duty += 5) {
+//     analogWrite(MOTOR_PIN, duty);
+//     delay(20);
+//   }
+// }
 
-  setScreen(percentFromTarget());
+void setMotorState(int state) {
+  // Only reset the pattern if the state changes
+  if (MOTOR_STATE == state) return;
+
+  MOTOR_STATE = state;
+  motorNextMs = 0;
+  motorStep = 0;
+  analogWrite(MOTOR_PIN, 0); // ensure off
+}
+
+// Call this EVERY loop (non-blocking)
+void updateMotor() {
+  unsigned long now = millis();
+  if (now < motorNextMs) return;
+
+  // ---------- SPEED UP ----------
+  if (MOTOR_STATE == SPEED_UP) {
+    if (motorStep == 0) { analogWrite(MOTOR_PIN, 255); motorNextMs = now + 250; motorStep = 1; }
+    else               { analogWrite(MOTOR_PIN, 0);   motorNextMs = now + 500; motorStep = 0; }
+  }
+
+  // ---------- SLOW DOWN ----------
+  else if (MOTOR_STATE == SLOW_DOWN) {
+    if (motorStep == 0) { analogWrite(MOTOR_PIN, 255); motorNextMs = now + 500; motorStep = 1; }
+    else               { analogWrite(MOTOR_PIN, 0);   motorNextMs = now + 500; motorStep = 0; }
+  }
+
+  // ---------- ON PACE ----------
+  else {
+    analogWrite(MOTOR_PIN, 0);
+    motorNextMs = now + 200;
+    motorStep = 0;
+  }
+}
+
+void delayWithMotor(unsigned long ms) {
+  unsigned long start = millis();
+  while (millis() - start < ms) {
+    updateMotor();   // keep stepping the vibration pattern
+    delay(1);        // yield a tiny bit
+  }
 }
