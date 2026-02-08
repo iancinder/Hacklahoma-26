@@ -35,6 +35,14 @@ int MOTOR_STATE = ON_PACE; // default
 unsigned long motorNextMs = 0;
 int motorStep = 0;
 
+double metersTraveled = 0.0;
+double milesTraveled = 0.0;
+int displayMilesOrStatus;
+
+unsigned long displayNextMs = 0;
+bool showDistance = false;
+const char* statusText = "BOOT";   // points to string literal (safe)
+
 Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
 
 void setup() {
@@ -57,6 +65,7 @@ void setup() {
 /////////////LOOP/////////////
 void loop() {
   updateMotor();
+  updateDisplay();
 
   int targetPace = 8 * 60; // minutes per mile
 
@@ -100,6 +109,10 @@ void loop() {
   gpsToScreenTest(lastLon, lastLat, oneLon, oneLat, lastTime, oneTime, targetPace);
   // slowDownMotor();
   delayWithMotor(3000);
+
+  // Serial.println(String(metersTraveled, 2) + " meters");
+  // milesTraveled = metersTraveled / 1609.34;
+  // Serial.println(String(milesTraveled, 2) + " miles");
 }
 /////////////LOOP/////////////
 
@@ -230,27 +243,46 @@ void timeToScreenTest(int current, int target) {
 
 void gpsToScreenTest(double lastLon, double lastLat, double oneLon, double oneLat, int lastTime, int oneTime, int targetPace) {
   double metersCovered = haversineMeters(lastLat, lastLon, oneLat, oneLon); // gives meters
+  metersTraveled += metersCovered;
   int currentPace = metersAndSecToSecPerMile(metersCovered, (oneTime - lastTime));
   CURRENT_PACE = currentPace;
   TARGET_PACE = targetPace;
-  setScreen(percentFromTarget());
+  
+  int percent = percentFromTarget();
+
+    // set motor + statusText, but don't redraw here
+  if (abs(percent) < PACE_TOLERANCE) {
+    statusText = "ON PACE";
+    setMotorState(ON_PACE);
+  } else if (percent > PACE_TOLERANCE) {
+    statusText = "SPD UP";
+    setMotorState(SPEED_UP);
+  } else {
+    statusText = "SLW DWN";
+    setMotorState(SLOW_DOWN);
+  }
 }
 
-// void slowDownMotor() {
-//   // Ramp DOWN
-//   for (int duty = 255; duty >= 0; duty -= 5) {
-//     analogWrite(MOTOR_PIN, duty);
-//     delay(20);
-//   }
-// }
+void updateDisplay() {
+  unsigned long now = millis();
+  if (now < displayNextMs) return;
+  displayNextMs = now + 1000;
 
-// void speedUpMotor() {
-//   // Ramp UP
-//   for (int duty = 0; duty <= 255; duty += 5) {
-//     analogWrite(MOTOR_PIN, duty);
-//     delay(20);
-//   }
-// }
+  showDistance = !showDistance;
+
+  String top = "Target: " + intSecondsToStringMinutes(TARGET_PACE);
+  String bottom = "Current: " + intSecondsToStringMinutes(CURRENT_PACE);
+
+  if (!showDistance) {
+    // show status
+    drawScreen(top.c_str(), statusText, bottom.c_str());
+  } else {
+    // show distance (miles)
+    double miles = metersTraveled / 1609.34;
+    String distStr = String(miles, 2) + " mi";
+    drawScreen(top.c_str(), distStr.c_str(), bottom.c_str());
+  }
+}
 
 void setMotorState(int state) {
   // Only reset the pattern if the state changes
@@ -260,6 +292,8 @@ void setMotorState(int state) {
   motorNextMs = 0;
   motorStep = 0;
   analogWrite(MOTOR_PIN, 0); // ensure off
+
+  showStatusNow();
 }
 
 // Call this EVERY loop (non-blocking)
@@ -270,6 +304,8 @@ void updateMotor() {
   // ---------- SPEED UP ----------
   if (MOTOR_STATE == SPEED_UP) {
     if (motorStep == 0) { analogWrite(MOTOR_PIN, 255); motorNextMs = now + 250; motorStep = 1; }
+    else if (motorStep == 1) { analogWrite(MOTOR_PIN, 0); motorNextMs = now + 250; motorStep = 2; }
+    else if (motorStep == 2) { analogWrite(MOTOR_PIN, 255); motorNextMs = now + 250; motorStep = 3; }
     else               { analogWrite(MOTOR_PIN, 0);   motorNextMs = now + 500; motorStep = 0; }
   }
 
@@ -291,6 +327,16 @@ void delayWithMotor(unsigned long ms) {
   unsigned long start = millis();
   while (millis() - start < ms) {
     updateMotor();   // keep stepping the vibration pattern
+    updateDisplay();
     delay(1);        // yield a tiny bit
   }
+}
+
+void showStatusNow() {
+  showDistance = false;      // status first
+  displayNextMs = millis() + 1000;  // start the 1-second cadence from now
+
+  String top = "Target: " + intSecondsToStringMinutes(TARGET_PACE);
+  String bottom = "Current: " + intSecondsToStringMinutes(CURRENT_PACE);
+  drawScreen(top.c_str(), statusText, bottom.c_str());
 }
