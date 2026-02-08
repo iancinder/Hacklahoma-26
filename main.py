@@ -111,3 +111,66 @@ def predict():
 if __name__ == '__main__':
     print("Server is running")
     app.run(debug=True, port=5001)
+
+
+    # --- NEW: The "Mailbox" for the Arduino ---
+# This global variable stores the last calculated pace.
+# The website updates it -> The Arduino reads it.
+current_pace = 0.0 
+
+@app.route('/predict', methods=['POST'])
+def predict():
+    global current_pace # <--- Tell Python we want to write to the global var
+    try:
+        data = request.json
+        print(f"Received Inputs: {data}")
+
+        # 1. Parse Inputs (Same as before)
+        p_age = float(data.get('age') or 22)
+        p_weight = float(data.get('weight_lb') or 160)
+        p_flat_speed = float(data.get('flat_speed_mph') or 3.0)
+        p_vert_speed = float(data.get('vertical_speed_fph') or 1000)
+        p_fitness = float(data.get('fitness_level') or 0.5)
+        p_dist = float(data.get('distance_mi') or 5.0)
+        p_gain = float(data.get('elevation_gain_ft') or 1000)
+        p_diff = data.get('difficulty') if data.get('difficulty') else 'moderate'
+        p_activity = data.get('activity_type') if data.get('activity_type') else 'hiking'
+
+        # 2. Run the Math (Same as before)
+        calc_time = estimate_time(p_dist, p_gain, p_flat_speed, p_vert_speed, p_diff, p_fitness, p_activity)
+        calc_cals = estimate_calories(p_weight, p_dist, p_gain, p_flat_speed, p_activity, p_diff)
+        calc_fatigue = estimate_fatigue(calc_cals, p_weight, p_age, p_fitness)
+
+        # 3. Calculate Pace for the Watch
+        if p_dist > 0:
+            pace_val = round((calc_time * 60) / p_dist, 0)
+        else:
+            pace_val = 0
+
+        # --- NEW: Update the Global Variable ---
+        current_pace = pace_val
+        print(f"Updated Watch Pace: {current_pace} min/mi")
+
+        # 4. Reply to Website
+        return jsonify({
+            "time_hr": round(calc_time, 2),
+            "calories": int(calc_cals),
+            "fatigue": round(calc_fatigue * 10, 1),
+            "pace": pace_val
+        })
+
+    except Exception as e:
+        print(f"Error: {e}")
+        return jsonify({"error": str(e)}), 500
+
+# --- NEW: The Arduino Route ---
+# The ESP32 calls this function to get the number.
+@app.route('/get_pace', methods=['GET'])
+def get_pace():
+    # We return the number as a simple string (e.g., "12.0")
+    return str(current_pace)
+
+if __name__ == '__main__':
+    print("Server is running on Port 5001")
+    # --- CHANGED: host='0.0.0.0' allows external connections! ---
+    app.run(debug=True, host='0.0.0.0', port=5001)
