@@ -29,16 +29,16 @@ from engine.fatigue import estimate_fatigue
 # Define user inputs
 user = {
     "age": 22,                          # [years]
-    "weight_lb": 172,                   # [pounds]
-    "flat_speed_mph": 3.8,              # Typical hiking pace [miles per hour]
-    "vertical_speed_fph": 1500,         # Typical climbing rate [feet per hour]
-    "fitness_level": 0.7                # 0-1 scale
+    "weight_lb": 160,                   # [pounds]
+    "flat_speed_mph": 3.0,              # Typical hiking pace [miles per hour]
+    "vertical_speed_fph": 1000,         # Typical climbing rate [feet per hour]
+    "fitness_level": 0.5                # 0-1 scale
 }
 
 # Define trail inputs
 trail = {
-    "distance_mi": 3.8,             # [miles]
-    "elevation_gain_ft": 78,        # [feet]
+    "distance_mi": 5.0,             # [miles]
+    "elevation_gain_ft": 1500,        # [feet]
     "difficulty": "easy"            # Categories: easy, moderate, hard
 }
 
@@ -51,10 +51,10 @@ app_inputs = {
 # Call calculation functions
 time_hr = estimate_time(trail["distance_mi"], trail["elevation_gain_ft"],
                         user["flat_speed_mph"], user["vertical_speed_fph"],
-                        trail["difficulty"])
+                        trail["difficulty"], user["fitness_level"])
 
 calories = estimate_calories(user["weight_lb"], trail["distance_mi"], trail["elevation_gain_ft"],
-                         app_inputs["activity_type"], trail["difficulty"])
+                         user["flat_speed_mph"], app_inputs["activity_type"], trail["difficulty"])
 
 fatigue = estimate_fatigue(calories, user["weight_lb"], user["age"], user["fitness_level"])
 
@@ -90,9 +90,9 @@ def predict():
 
         # 3. Call keegans functions to perform calculations
         
-        calc_time = estimate_time(p_dist, p_gain, p_flat_speed, p_vert_speed, p_diff)
+        calc_time = estimate_time(p_dist, p_gain, p_flat_speed, p_vert_speed, p_diff, p_fitness)
         
-        calc_cals = estimate_calories(p_weight, p_dist, p_gain, p_activity, p_diff)
+        calc_cals = estimate_calories(p_weight, p_dist, p_gain, p_flat_speed, p_activity, p_diff)
         
         calc_fatigue = estimate_fatigue(calc_cals, p_weight, p_age, p_fitness)
 
