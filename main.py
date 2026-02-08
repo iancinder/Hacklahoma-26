@@ -51,7 +51,7 @@ app_inputs = {
 # Call calculation functions
 time_hr = estimate_time(trail["distance_mi"], trail["elevation_gain_ft"],
                         user["flat_speed_mph"], user["vertical_speed_fph"],
-                        trail["difficulty"], user["fitness_level"])
+                        trail["difficulty"], user["fitness_level"], app_inputs["activity_type"])
 
 calories = estimate_calories(user["weight_lb"], trail["distance_mi"], trail["elevation_gain_ft"],
                          user["flat_speed_mph"], app_inputs["activity_type"], trail["difficulty"])
@@ -90,7 +90,7 @@ def predict():
 
         # 3. Call keegans functions to perform calculations
         
-        calc_time = estimate_time(p_dist, p_gain, p_flat_speed, p_vert_speed, p_diff, p_fitness)
+        calc_time = estimate_time(p_dist, p_gain, p_flat_speed, p_vert_speed, p_diff, p_fitness, p_activity)
         
         calc_cals = estimate_calories(p_weight, p_dist, p_gain, p_flat_speed, p_activity, p_diff)
         

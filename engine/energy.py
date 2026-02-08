@@ -33,16 +33,13 @@ def estimate_calories(weight_lb, distance_mi, elevation_gain_ft, flat_speed_mph,
     # We normalize against a standard pace (3.0 mph).
     # We square the factor so intensity rises faster than duration falls.
     if flat_speed_mph > 3.0:
-        speed_factor = (flat_speed_mph / 3.0) ** 1.35
+        speed_factor = (flat_speed_mph / 3.0) ** 1.5
         met = met * speed_factor
 
-    # Clamp MET to realistic human limits (20 is about the max for elite athletes)
-    met = min(met, 18)
 
     # Duration estimate in hours using pace
     #       For simplicity, assume average speed = flat speed
     #       Equation: duration = distance / speed
-
     if flat_speed_mph <= 0:
         flat_speed_mph = 3.0  # Default to 3 mph if invalid input
 
