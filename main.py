@@ -19,35 +19,43 @@ from flask import Flask, request, jsonify
 from flask_cors import CORS
 import serial
 import time
-
-# Import engine files
-from engine.pace import estimate_time
-from engine.energy import estimate_calories
-from engine.fatigue import estimate_fatigue
+import pandas as pd # Needed to format data for the AI
+import joblib       # Needed to load the .pkl brain files
+import os
 
 # --- CONFIGURATION ---
-SERIAL_PORT = 'COM3'  
+SERIAL_PORT = 'COM3'  # make sure this is the correct port
 BAUD_RATE = 115200
 
 app = Flask(__name__)
 CORS(app)
 
+# --- LOAD THE AI MODELS ---
+# We load these once when the server starts so it's fast.
+try:
+    # Load the "Brains"
+    model_time = joblib.load('model_time.pkl')
+    model_cals = joblib.load('model_calories.pkl')
+    model_fatigue = joblib.load('model_fatigue.pkl')
+    print("✅ AI Models Loaded Successfully!")
+except Exception as e:
+    print(f"❌ Could not load models. {e}")
+    print("Did you run 'train_model.py'?")
+    # If models fail, we set them to None and handle it later
+    model_time = None
+    model_cals = None
+    model_fatigue = None
+
 def send_pace_to_arduino(pace_value):
     """
-    Opens the USB connection, sends the number, and closes it.
-    This is safer than keeping it open forever.
+    Sends the calculated pace to the watch via USB.
     """
     try:
-        # 1. Open Connection
         arduino = serial.Serial(SERIAL_PORT, BAUD_RATE, timeout=2)
-        time.sleep(2) # Wait for Arduino to reset
-        
-        # 2. Send Data
+        time.sleep(2) 
         msg = f"{pace_value}\n"
         arduino.write(msg.encode('utf-8'))
-        print(f"✅ Sent to Watch: {msg.strip()}")
-        
-        # 3. Close Connection
+        print(f"Sent to Watch: {msg.strip()}")
         arduino.close()
         return True
     except Exception as e:
@@ -60,44 +68,60 @@ def predict():
         data = request.json
         print(f"Received Inputs: {data}")
 
-        # 1. Parse Inputs
-        p_age = float(data.get('age') or 22)
-        p_weight = float(data.get('weight_lb') or 160)
-        p_flat_speed = float(data.get('flat_speed_mph') or 3.0)
-        p_vert_speed = float(data.get('vertical_speed_fph') or 1000)
-        p_fitness = float(data.get('fitness_level') or 0.5)
-        p_dist = float(data.get('distance_mi') or 5.0)
-        p_gain = float(data.get('elevation_gain_ft') or 1000)
-        p_diff = data.get('difficulty') if data.get('difficulty') else 'moderate'
-        p_activity = data.get('activity_type') if data.get('activity_type') else 'hiking'
+        # 1. PARSE INPUTS
+        # We need to grab the data and put it into a format the AI understands.
+        # The AI expects a "DataFrame" with specific column names.
+        
+        # Create a single-row DataFrame with the exact column names from training
+        input_df = pd.DataFrame([{
+            'weight_lb': float(data.get('weight_lb') or 160),
+            'age': float(data.get('age') or 22),
+            'fitness_level': float(data.get('fitness_level') or 0.5),
+            'distance_mi': float(data.get('distance_mi') or 5.0),
+            'elevation_gain_ft': float(data.get('elevation_gain_ft') or 1000),
+            'flat_speed_mph': float(data.get('flat_speed_mph') or 3.0),
+            'vertical_speed_fph': float(data.get('vertical_speed_fph') or 1000),
+            'difficulty': data.get('difficulty') or 'moderate',      # Pass string directly!
+            'activity_type': data.get('activity_type') or 'hiking'   # Pass string directly!
+        }])
 
-        # 2. Run Math
-        calc_time = estimate_time(p_dist, p_gain, p_flat_speed, p_vert_speed, p_diff, p_fitness, p_activity)
-        calc_cals = estimate_calories(p_weight, p_dist, p_gain, p_flat_speed, p_activity, p_diff)
-        calc_fatigue = estimate_fatigue(calc_cals, p_weight, p_age, p_fitness)
+        # 2. ASK THE AI FOR PREDICTIONS
+        if model_time is not None:
+            # .predict() returns a list, so we take the first item [0]
+            pred_time = model_time.predict(input_df)[0]
+            pred_cals = model_cals.predict(input_df)[0]
+            pred_fatigue = model_fatigue.predict(input_df)[0]
+        else:
+            return jsonify({"error": "Models are not loaded on the server."}), 500
 
-        # 3. Calculate Pace
-        if p_dist > 0:
-            pace_val = round((calc_time * 60) / p_dist, 1) # Round to 1 decimal place
+        # 3. CALCULATE PACE (Derived from Time)
+        # Pace = (Total Minutes) / Distance
+        dist = input_df['distance_mi'][0]
+        if dist > 0:
+            pace_val = round((pred_time * 60) / dist, 1)
         else:
             pace_val = 0.0
 
         # --- SEND TO ARDUINO ---
-        send_pace_to_arduino(pace_val)
+        # Only send if we are running locally with a USB device attached
+        # send_pace_to_arduino(pace_val) 
 
-        # 4. Reply to Website
-        return jsonify({
-            "time_hr": round(calc_time, 2),
-            "calories": int(calc_cals),
-            "fatigue": round(calc_fatigue * 10, 1),
-            "pace": pace_val
-        })
+        # 4. REPLY TO FRONTEND
+        response = {
+            "time_hr": round(pred_time, 2),
+            "calories": int(pred_cals),
+            "fatigue": round(pred_fatigue * 10, 1), # Scale 0-1 to 0-10 for UI
+            "pace": pace_val,
+            "method": "AI_Prediction" # Just for debugging so you know it worked
+        }
+        
+        print(f"Sending Response: {response}")
+        return jsonify(response)
 
     except Exception as e:
-        print(f"Error: {e}")
+        print(f"❌ Error during prediction: {e}")
         return jsonify({"error": str(e)}), 500
 
 if __name__ == '__main__':
     print("Server is running on Port 5001")
-    # use_reloader=False prevents the "Double Start" bug that locks the USB port
     app.run(debug=True, use_reloader=False, port=5001)

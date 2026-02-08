@@ -30,7 +30,7 @@ body {
     display: flex; /* Puts the two panes side-by-side */
     background: white;
     width: 900px;
-    height: 600px;
+    height: 650px;
     border-radius: 12px;
     box-shadow: 0 10px 25px rgba(0,0,0,0.1); /* shadow */
     overflow: hidden; /* ensurers corners are rounded */
